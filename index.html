@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>For you, Red</title>
+<meta name="description" content="A little bouquet, just for you.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="For you my dearest Red &lt;3">
+<meta property="og:description" content="A little bouquet, just for you.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="For you my dearest Red &lt;3">
+<meta name="twitter:description" content="A little bouquet, just for you.">
+<meta name="theme-color" content="#0e0e14">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #0e0e14; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  #wrap { position: relative; }
+  #art, #msg {
+    font-family: "DejaVu Sans Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    white-space: pre; margin: 0; color: #e5e5e5;
+    -webkit-text-size-adjust: none; text-size-adjust: none;
+    font-variant-ligatures: none; user-select: none; -webkit-user-select: none;
+  }
+  #art .w { display: inline-block; width: 1ch; text-align: center; overflow: hidden; vertical-align: top; }
+  #msg { position: absolute; left: 0; right: 0; text-align: center; font-weight: bold; }
+  #probebox { position: fixed; left: 0; top: 0; width: 0; height: 0; overflow: hidden; visibility: hidden; }
+  #probe { position: absolute; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="wrap"><pre id="art" aria-hidden="true"></pre><div id="msg" role="heading" aria-label="For you my dearest Red &lt;3"></div></div>
+<div id="probebox"><span id="probe"></span></div>
+<script>
+(function () {
+"use strict";
+
+// ---- Python-compatible Mersenne Twister (random.Random(seed)) ----
+function PyRandom(seed) {
+  var N = 624, mt = new Uint32Array(N), mti = N + 1;
+  function initGenrand(s) {
+    mt[0] = s >>> 0;
+    for (mti = 1; mti < N; mti++) {
+      var p = mt[mti - 1] ^ (mt[mti - 1] >>> 30);
+      mt[mti] = (Math.imul(1812433253, p) + mti) >>> 0;
+    }
+  }
+  function initByArray(key) {
+    initGenrand(19650218);
+    var i = 1, j = 0, k = Math.max(N, key.length);
+    for (; k; k--) {
+      var p = mt[i - 1] ^ (mt[i - 1] >>> 30);
+      mt[i] = ((mt[i] ^ Math.imul(p, 1664525)) + key[j] + j) >>> 0;
+      i++; j++;
+      if (i >= N) { mt[0] = mt[N - 1]; i = 1; }
+      if (j >= key.length) j = 0;
+    }
+    for (k = N - 1; k; k--) {
+      var q = mt[i - 1] ^ (mt[i - 1] >>> 30);
+      mt[i] = ((mt[i] ^ Math.imul(q, 1566083941)) - i) >>> 0;
+      i++;
+      if (i >= N) { mt[0] = mt[N - 1]; i = 1; }
+    }
+    mt[0] = 0x80000000;
+  }
+  function genrand() {
+    var y, kk;
+    if (mti >= N) {
+      for (kk = 0; kk < N - 397; kk++) {
+        y = (mt[kk] & 0x80000000) | (mt[kk + 1] & 0x7fffffff);
+        mt[kk] = mt[kk + 397] ^ (y >>> 1) ^ ((y & 1) ? 0x9908b0df : 0);
+      }
+      for (; kk < N - 1; kk++) {
+        y = (mt[kk] & 0x80000000) | (mt[kk + 1] & 0x7fffffff);
+        mt[kk] = mt[kk + (397 - N)] ^ (y >>> 1) ^ ((y & 1) ? 0x9908b0df : 0);
+      }
+      y = (mt[N - 1] & 0x80000000) | (mt[0] & 0x7fffffff);
+      mt[N - 1] = mt[396] ^ (y >>> 1) ^ ((y & 1) ? 0x9908b0df : 0);
+      mti = 0;
+    }
+    y = mt[mti++];
+    y ^= (y >>> 11);
+    y ^= (y << 7) & 0x9d2c5680;
+    y ^= (y << 15) & 0xefc60000;
+    y ^= (y >>> 18);
+    return y >>> 0;
+  }
+  initByArray([seed >>> 0]);
+  this.random = function () {
+    var a = genrand() >>> 5, b = genrand() >>> 6;
+    return (a * 67108864 + b) / 9007199254740992;
+  };
+  this.uniform = function (a, b) { return a + (b - a) * this.random(); };
+}
+
+// ---- Scene constants (ported from bouquet3d.py) ----
+var SPIN_SPEED = 0.6, TILT = 0.30, CAM_DIST = 4.0;
+var MESSAGE = "For you my dearest Red <3";
+var NUM_HEARTS = 18;
+var WHITE = [244, 248, 251, 254, 255, 231];
+var GOLD_CENTER = [94, 136, 178, 214, 220];
+var GREENS = [22, 28, 28, 34, 35, 71, 77, 114];
+var LILY_PINK = [[89, 126, 162, 163, 199, 200, 206], [132, 168, 175, 211, 212, 218, 225], [53, 89, 89, 125]];
+var LILY_PEACH = [[130, 166, 202, 208, 209, 209, 215], [137, 173, 209, 215, 216, 217, 223], [88, 124, 124, 130]];
+var LILY_THROAT = [100, 107, 143, 149, 186, 193];
+var STAMEN = [101, 107, 144, 150, 151, 187];
+var ANTHER = [52, 94, 94, 130, 130, 166];
+var EUCALYPTUS = [23, 66, 72, 108, 109, 115, 151, 152];
+var EUC_STEM = [58, 95, 101, 102, 138, 144];
+var PAPER = [101, 144, 187, 223, 230, 231];
+var RIBBON = [88, 125, 161, 197, 204, 211];
+var HEART_COLORS = [161, 197, 204, 205, 211, 218];
+var MSG_COLORS = [161, 168, 205, 211, 218, 225, 218, 211, 205, 168];
+var SHADE = ".:-=+*%@", PETAL_SHADE = "+*#%", COIN_SHADE = "ooO0@";
+var PIVOT_Y = 0.2;
+var L0 = [-0.45, 0.6, 0.66], Ln = Math.hypot(L0[0], L0[1], L0[2]);
+var LX = L0[0] / Ln, LY = L0[1] / Ln, LZ = L0[2] / Ln;
+var DISC_TYPES = [[WHITE, GOLD_CENTER, 13]];
+var LILY_TYPES = [LILY_PINK, LILY_PEACH, LILY_PINK];
+var LILY_SLOTS = {0: 1, 2: 1, 4: 1, 6: 1, 8: 1};
+var PI = Math.PI, sin = Math.sin, cos = Math.cos, sqrt = Math.sqrt, abs = Math.abs;
+var trunc = Math.trunc, min = Math.min, max = Math.max;
+
+function norm(v) { var m = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1; return [v[0] / m, v[1] / m, v[2] / m]; }
+function addv(p, d, k) { return [p[0] + d[0] * k, p[1] + d[1] * k, p[2] + d[2] * k]; }
+function clampB(b) { return min(0.999, max(0, b)); }
+function pick(pal, b) { return pal[trunc(b * pal.length)]; }
+
+function buildScene() {
+  var rnd = new PyRandom(21);
+  var pts = [];
+  function P(x, y, z, nx, ny, nz, pal, tone, two, ov) { pts.push([x, y, z, nx, ny, nz, pal, tone, two, ov]); }
+  var neck = [0, -0.12, 0];
+  var C = [0, 0.12, 0], D = 0.64, N = 9;
+  var golden = PI * (3 - sqrt(5));
+  var heads = [], i, j, k, t, p;
+  for (i = 0; i < N; i++) {
+    var el = (88 - 60 * sqrt(i / (N - 1))) * PI / 180;
+    var az = i * golden;
+    var d = [cos(el) * cos(az), sin(el), cos(el) * sin(az)];
+    var pos = addv(C, d, D * rnd.uniform(0.92, 1.05));
+    heads.push([pos, norm(d)]);
+  }
+  var flowers = [], disc_i = 0, lily_i = 0;
+  for (var idx = 0; idx < heads.length; idx++) {
+    var hp = heads[idx][0], axis = heads[idx][1];
+    var base = addv(hp, axis, -0.03);
+    for (j = 0; j < 70; j++) {
+      t = j / 69;
+      P(base[0] + (neck[0] - base[0]) * t, base[1] + (neck[1] - base[1]) * t, base[2] + (neck[2] - base[2]) * t,
+        axis[0], 0, axis[2], GREENS, -0.15, true, null);
+    }
+    if (LILY_SLOTS[idx]) {
+      var pal = LILY_TYPES[lily_i % LILY_TYPES.length]; lily_i++;
+      var R1 = rnd.uniform(0.18, 0.195), S1 = rnd.uniform(0, 6.28);
+      flowers.push([hp, "lily", pal, null, 6, R1, S1]);
+    } else {
+      var dt = DISC_TYPES[disc_i % DISC_TYPES.length]; disc_i++;
+      var R2 = rnd.uniform(0.12, 0.14), S2 = rnd.uniform(0, 6.28);
+      flowers.push([hp, "disc", dt[0], dt[1], dt[2], R2, S2]);
+    }
+  }
+
+  var coins = [], n_sprigs = 11;
+  for (i = 0; i < n_sprigs; i++) {
+    var a = (i + 0.3) / n_sprigs * 2 * PI + rnd.uniform(-0.15, 0.15);
+    var c = cos(a), sn = sin(a);
+    var inner = i % 2 === 1;
+    var el2 = inner ? rnd.uniform(0.95, 1.25) : rnd.uniform(0.40, 0.70);
+    var length = inner ? rnd.uniform(0.58, 0.66) : rnd.uniform(0.44, 0.52);
+    var r_base = inner ? 0.10 : 0.22;
+    var b0 = [r_base * c, 0.24, r_base * sn];
+    var d2 = [cos(el2) * c, sin(el2), cos(el2) * sn];
+    var side = [-sn, 0, c];
+    var stem = [];
+    for (j = 0; j < 60; j++) {
+      t = j / 59;
+      p = [b0[0] + d2[0] * length * t, b0[1] + d2[1] * length * t - 0.10 * t * t, b0[2] + d2[2] * length * t];
+      stem.push(p);
+      P(p[0], p[1], p[2], c, 0.3, sn, EUC_STEM, -0.05, true, null);
+    }
+    var n_leaves = 6;
+    for (k = 0; k < n_leaves; k++) {
+      t = 0.30 + 0.70 * k / (n_leaves - 1);
+      var sp = stem[min(59, trunc(t * 59))];
+      var r = 0.050 * (1.0 - 0.40 * t) * rnd.uniform(0.9, 1.1);
+      var sd = k % 2 ? 1 : -1;
+      var off = r * 0.75;
+      var lp = [sp[0] + side[0] * sd * off, sp[1] + 0.25 * off, sp[2] + side[2] * sd * off];
+      coins.push([lp[0], lp[1], lp[2], r, rnd.uniform(-0.12, 0.12)]);
+    }
+    var tip = stem[59];
+    coins.push([tip[0] + d2[0] * 0.02, tip[1] + d2[1] * 0.02, tip[2] + d2[2] * 0.02, 0.022, 0.05]);
+  }
+
+  var y0 = -0.20, y1 = 0.30, r0 = 0.06, r1 = 0.36;
+  var kk = (r1 - r0) / (y1 - y0), rings = 50;
+  for (i = 0; i < rings; i++) {
+    t = i / (rings - 1);
+    var rr = r0 + (r1 - r0) * t;
+    var count = max(8, trunc(170 * rr));
+    for (j = 0; j < count; j++) {
+      var ph = (j + rnd.random()) / count * 2 * PI;
+      var cc = cos(ph), s = sin(ph);
+      var y = y0 + (y1 - y0) * t;
+      if (t > 0.9) y += 0.03 * sin(9 * ph);
+      var fold = 0.3 * (abs(sin(5 * ph)) - 0.6);
+      var nn = norm([cc, -kk, s]);
+      P(rr * cc, y, rr * s, nn[0], nn[1], nn[2], PAPER, fold, false, null);
+    }
+  }
+  for (i = 0; i < 7; i++) {
+    var a2 = i / 7 * 2 * PI;
+    var sx = 0.025 * cos(a2), sz = 0.025 * sin(a2);
+    for (j = 0; j < 40; j++) {
+      t = j / 39;
+      P(sx * (1 + 1.2 * t), -0.20 - 0.30 * t, sz * (1 + 1.2 * t), cos(a2), 0, sin(a2), GREENS, -0.1, true, null);
+    }
+  }
+  var by = -0.12, br = r0 + kk * (by - y0) + 0.01;
+  for (j = 0; j < 90; j++) {
+    var ph2 = j / 90 * 2 * PI;
+    [-0.012, 0, 0.012].forEach(function (dy) {
+      P(br * cos(ph2), by + dy, br * sin(ph2), cos(ph2), 0, sin(ph2), RIBBON, 0, false, null);
+    });
+  }
+  var knot = [0, by, br + 0.01];
+  [-1, 1].forEach(function (sd) {
+    var j, t;
+    for (j = 0; j < 70; j++) {
+      var a = j / 70 * 2 * PI;
+      var lx = sd * (0.07 + 0.07 * cos(a));
+      var ly = 0.04 * sin(a) + 0.02 * (0.07 + 0.07 * cos(a)) / 0.14;
+      [1.0, 0.7].forEach(function (fill) {
+        P(knot[0] + lx * fill, knot[1] + ly * fill, knot[2] + 0.01, sd * 0.3, 0.2, 0.93, RIBBON, 0.1, true, null);
+      });
+    }
+    for (j = 0; j < 30; j++) {
+      t = j / 29;
+      P(knot[0] + sd * 0.06 * t, knot[1] - 0.15 * t, knot[2] + 0.015, sd * 0.2, 0, 0.98, RIBBON, -0.05 + 0.05 * sin(t * 9), true, null);
+    }
+  });
+  [-0.01, 0, 0.01].forEach(function (dx) { P(dx, by, knot[2] + 0.02, 0, 0, 1, RIBBON, 0.2, true, "@"); });
+
+  var babies = [];
+  for (i = 0; i < 90; i++) {
+    var a3 = rnd.random() * 2 * PI;
+    var el3 = rnd.uniform(0.3, 1.4);
+    var rr3 = rnd.uniform(0.40, 0.58);
+    var bx = rr3 * cos(a3) * cos(el3), byy = C[1] + rr3 * sin(el3), bz = rr3 * sin(a3) * cos(el3);
+    babies.push([bx, byy, bz, rnd.uniform(0, 6.28)]);
+  }
+  var sparkles = [];
+  for (i = 0; i < 30; i++) {
+    var a4 = rnd.random() * 2 * PI;
+    var rr4 = rnd.uniform(0.75, 0.95);
+    var spx = rr4 * cos(a4), spy = rnd.uniform(-0.3, 1.0), spz = rr4 * sin(a4);
+    var sph = rnd.uniform(0, 6.28), sps = rnd.uniform(1.5, 4.0);
+    sparkles.push([spx, spy, spz, sph, sps]);
+  }
+  return {pts: pts, flowers: flowers, babies: babies, sparkles: sparkles, coins: coins};
+}
+
+// ---- Hearts (global, non-seeded random, like the Python version) ----
+function ru(a, b) { return a + (b - a) * Math.random(); }
+function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function updateHearts(hearts, dt) {
+  while (hearts.length < NUM_HEARTS)
+    hearts.push([Math.random(), 1.0 + Math.random(), ru(0.03, 0.08), ru(0, 6.28), choice(HEART_COLORS)]);
+  for (var i = 0; i < hearts.length; i++) {
+    var h = hearts[i];
+    h[1] -= h[2] * dt;
+    if (h[1] < 0) { h[0] = Math.random(); h[1] = 1.0; h[4] = choice(HEART_COLORS); }
+  }
+}
+
+// ---- Renderer ----
+function render(scene, t, cols, rows, hearts, chars, colors, zbuf) {
+  var n = cols * rows, i;
+  for (i = 0; i < n; i++) { chars[i] = " "; colors[i] = 0; zbuf[i] = -1e9; }
+  var view_rows = rows - 2;
+  var scale = max(1.0, min((view_rows - 2) / 1.45, (cols - 2) / 2.7));
+  var sx_scale = scale * 2.0;
+  var cx = cols / 2;
+  // Same as the terminal version, plus vertical centring when the window is taller than needed (phones).
+  var cy = 1 + 0.78 * scale + max(0, (view_rows - 2 - 1.45 * scale) / 2);
+  var ang = t * SPIN_SPEED;
+  var ca = cos(ang), sa = sin(ang), ct = cos(TILT), st = sin(TILT);
+  var PX = 0, PY = 0, PZ = 0, PF = 0;
+  function projectF(x, y, z) {
+    var xr = x * ca - z * sa, zr = x * sa + z * ca, yp = y - PIVOT_Y;
+    var yt = yp * ct - zr * st, zt = yp * st + zr * ct;
+    var f = CAM_DIST / (CAM_DIST - zt);
+    PX = cx + xr * f * sx_scale; PY = cy - yt * f * scale; PZ = zt; PF = f;
+  }
+  function plot(col, row, z, ch, color) {
+    if (row >= 0 && row < view_rows && col >= 0 && col < cols) {
+      var k = row * cols + col;
+      if (z > zbuf[k]) { zbuf[k] = z; chars[k] = ch; colors[k] = color; }
+    }
+  }
+  for (i = 0; i < hearts.length; i++) {
+    var h = hearts[i];
+    var hc = trunc((h[0] + 0.015 * sin(t * 1.2 + h[3])) * cols);
+    hc = ((hc % cols) + cols) % cols;
+    plot(hc, trunc(h[1] * view_rows), -50, "\u2665", h[4]);
+  }
+  var pts = scene.pts;
+  for (i = 0; i < pts.length; i++) {
+    var q = pts[i];
+    projectF(q[0], q[1], q[2]);
+    var nxr = q[3] * ca - q[5] * sa, nzr = q[3] * sa + q[5] * ca;
+    var nyt = q[4] * ct - nzr * st, nzt = q[4] * st + nzr * ct;
+    var dot = nxr * LX + nyt * LY + nzt * LZ;
+    if (q[8] && dot < 0) dot = -dot * 0.55;
+    var b = clampB(0.25 + 0.75 * max(0, dot) + q[7]);
+    var ch = q[9] === "P" ? PETAL_SHADE[trunc(b * 4)] : (q[9] || SHADE[trunc(b * SHADE.length)]);
+    plot(trunc(PX), trunc(PY), PZ, ch, pick(q[6], b));
+  }
+
+  function drawLily(fx, fy, zt, f, pals, R, seed) {
+    var stripe = pals[0], edge = pals[1], spot = pals[2];
+    var rx = R * f * sx_scale, ry = R * f * scale;
+    var dim = -0.4 * (1 - min(1, max(0, (zt + 0.6) / 1.2)));
+    var rot = seed + ang * 0.7;
+    var row, col, k;
+    for (row = trunc(fy - ry) - 1; row < trunc(fy + ry) + 2; row++) {
+      var dy = (row + 0.5 - fy) / ry;
+      for (col = trunc(fx - rx) - 1; col < trunc(fx + rx) + 2; col++) {
+        var dx = (col + 0.5 - fx) / rx;
+        var s = sqrt(dx * dx + dy * dy);
+        if (s > 1) continue;
+        var b;
+        if (s < 0.16) {
+          b = clampB(0.55 - 0.3 * dx - 0.3 * dy + dim);
+          plot(col, row, zt + 0.05, "o", pick(LILY_THROAT, b));
+          continue;
+        }
+        var ph = Math.atan2(-dy, dx);
+        var bu = 0, bx = 0, bk = -1;
+        for (k = 0; k < 6; k++) {
+          var length = k % 2 === 0 ? 1.0 : 0.88;
+          var a = rot + k * PI / 3 + 0.45 * s * s;
+          var along = s * cos(ph - a), perp = s * sin(ph - a);
+          if (along <= 0 || along > length) continue;
+          var u0 = along / length;
+          var half = (k % 2 === 0 ? 0.20 : 0.16) * Math.pow(sin(PI * Math.pow(u0, 0.85)), 1.1);
+          if (abs(perp) < half) {
+            var xn0 = perp / half;
+            if (bk < 0 || abs(xn0) < abs(bx)) { bu = u0; bx = xn0; bk = k; }
+          }
+        }
+        if (bk < 0) continue;
+        var u = bu, xn = bx; k = bk;
+        var curl = u > 0.78;
+        b = 0.58 - 0.20 * dx - 0.25 * dy - 0.20 * Math.pow(abs(xn), 3) + dim;
+        if (curl) b -= 0.22 * (u - 0.78) / 0.22 + 0.08;
+        if (k % 2) b -= 0.06;
+        b = clampB(b);
+        var spotted = u > 0.2 && u < 0.6 && abs(xn) < 0.7 &&
+          ((trunc(u * 37 + k * 5) * 7 + trunc((xn + 1) * 3)) % 9 === 0);
+        var pal;
+        if (spotted) pal = spot;
+        else if (u < 0.22) pal = u < 0.12 ? LILY_THROAT : stripe;
+        else if (abs(xn) < 0.72 - 0.30 * u) pal = stripe;
+        else pal = edge;
+        var ch = curl && u > 0.9 ? "~" : PETAL_SHADE[trunc(b * 4)];
+        plot(col, row, zt + 0.04 * (1 - s) + (k % 2 === 0 ? 0.01 : 0), ch, pick(pal, b));
+      }
+    }
+    for (k = 0; k < 6; k++) {
+      var a2 = rot + k * PI / 3 + PI / 6 + 0.1;
+      var ln = k % 2 ? 0.40 : 0.46;
+      var ca_ = cos(a2), sa_ = sin(a2);
+      var slope = abs(ca_) > 1e-6 ? abs(sa_ / ca_) : 99;
+      var lch = slope < 0.4 ? "-" : slope > 2.5 ? "|" : (sa_ * ca_ > 0 ? "/" : "\\");
+      var steps = 3;
+      for (var ii = 0; ii <= steps; ii++) {
+        var r = 0.14 + (ln - 0.14) * ii / steps;
+        var c2 = trunc(fx + r * ca_ * rx), r2 = trunc(fy - r * sa_ * ry);
+        if (ii === steps) {
+          var bb = clampB(0.6 - 0.3 * ca_ * 0.5 + dim);
+          plot(c2, r2, zt + 0.12, "@", pick(ANTHER, bb));
+        } else {
+          plot(c2, r2, zt + 0.10, lch, STAMEN[min(STAMEN.length - 1, 3 + trunc(dim * 4))]);
+        }
+      }
+    }
+    plot(trunc(fx), trunc(fy), zt + 0.13, "*", 150);
+  }
+
+  var coins = scene.coins, row, col, dx, dy, s, b, rx, ry, dim, fx, fy, zt, f;
+  for (i = 0; i < coins.length; i++) {
+    var cn = coins[i];
+    projectF(cn[0], cn[1], cn[2]); fx = PX; fy = PY; zt = PZ; f = PF;
+    var R = cn[3], tone = cn[4];
+    rx = R * f * sx_scale; ry = R * f * scale;
+    dim = -0.45 * (1 - min(1, max(0, (zt + 0.6) / 1.2)));
+    for (row = trunc(fy - ry) - 1; row < trunc(fy + ry) + 2; row++) {
+      dy = (row + 0.5 - fy) / ry;
+      for (col = trunc(fx - rx) - 1; col < trunc(fx + rx) + 2; col++) {
+        dx = (col + 0.5 - fx) / rx;
+        s = sqrt(dx * dx + dy * dy);
+        if (s > 1) continue;
+        b = clampB(0.62 - 0.25 * dx - 0.30 * dy + tone + dim - (s > 0.72 ? 0.25 : 0));
+        var ch2 = (s > 0.72 && abs(dx) > 0.55) ? (dx < 0 ? "(" : ")") : COIN_SHADE[trunc(b * COIN_SHADE.length)];
+        plot(col, row, zt + 0.01, ch2, pick(EUCALYPTUS, b));
+      }
+    }
+  }
+
+  var flowers = scene.flowers;
+  for (i = 0; i < flowers.length; i++) {
+    var fl = flowers[i];
+    projectF(fl[0][0], fl[0][1], fl[0][2]); fx = PX; fy = PY; zt = PZ; f = PF;
+    var pal = fl[2], cpal = fl[3], n_pet = fl[4], FR = fl[5], seed = fl[6];
+    if (fl[1] === "lily") { drawLily(fx, fy, zt, f, pal, FR, seed); continue; }
+    rx = FR * f * sx_scale; ry = FR * f * scale;
+    dim = -0.4 * (1 - min(1, max(0, (zt + 0.6) / 1.2)));
+    var rot = seed + ang * 0.7;
+    for (row = trunc(fy - ry) - 1; row < trunc(fy + ry) + 2; row++) {
+      dy = (row + 0.5 - fy) / ry;
+      for (col = trunc(fx - rx) - 1; col < trunc(fx + rx) + 2; col++) {
+        dx = (col + 0.5 - fx) / rx;
+        s = sqrt(dx * dx + dy * dy);
+        if (s > 1) continue;
+        if (s < 0.3) {
+          b = clampB(0.55 - 0.35 * dx - 0.35 * dy + dim);
+          plot(col, row, zt + 0.06, s < 0.17 ? "@" : "o", pick(cpal, b));
+          continue;
+        }
+        var ph = Math.atan2(dy, dx);
+        var reach = 0.32 + 0.68 * Math.pow(abs(cos(n_pet * (ph + rot) / 2)), 0.7);
+        if (s > reach) continue;
+        var edgeV = s > reach - 0.14 ? -0.22 : 0;
+        b = clampB(0.62 - 0.22 * dx - 0.28 * dy + 0.12 * s + edgeV + dim);
+        plot(col, row, zt + 0.04 * (1 - s), PETAL_SHADE[trunc(b * 4)], pick(pal, b));
+      }
+    }
+  }
+
+  var babies = scene.babies;
+  for (i = 0; i < babies.length; i++) {
+    var bb2 = babies[i];
+    projectF(bb2[0], bb2[1], bb2[2]);
+    var star = sin(t * 2 + bb2[3]) > 0.6;
+    plot(trunc(PX), trunc(PY), PZ + 0.02, star ? "*" : "\u00b7", star ? 231 : 255);
+  }
+  var sparkles = scene.sparkles;
+  for (i = 0; i < sparkles.length; i++) {
+    var spk = sparkles[i];
+    projectF(spk[0], spk[1], spk[2]);
+    var tw = sin(t * spk[4] + spk[3]);
+    if (tw > 0.85) plot(trunc(PX), trunc(PY), PZ, "*", 231);
+    else if (tw > 0.4) plot(trunc(PX), trunc(PY), PZ, "+", 225);
+    else if (tw > 0) plot(trunc(PX), trunc(PY), PZ, "\u00b7", 218);
+  }
+}
+
+// ---- xterm-256 -> CSS colour ----
+var XBASE = [[0,0,0],[205,0,0],[0,205,0],[205,205,0],[0,0,238],[205,0,205],[0,205,205],[229,229,229],
+  [127,127,127],[255,0,0],[0,255,0],[255,255,0],[92,92,255],[255,0,255],[0,255,255],[255,255,255]];
+var CSS = [];
+(function () {
+  var v = [0, 95, 135, 175, 215, 255];
+  for (var n = 0; n < 256; n++) {
+    var c;
+    if (n < 16) c = XBASE[n];
+    else if (n < 232) { var m = n - 16; c = [v[trunc(m / 36)], v[trunc(m / 6) % 6], v[m % 6]]; }
+    else { var g = 8 + (n - 232) * 10; c = [g, g, g]; }
+    CSS[n] = "#" + c.map(function (x) { return ("0" + x.toString(16)).slice(-2); }).join("");
+  }
+})();
+
+function esc(ch) { return ch === "<" ? "&lt;" : ch === ">" ? "&gt;" : ch === "&" ? "&amp;" : ch; }
+
+// ---- Layout ----
+var art = document.getElementById("art"), msgEl = document.getElementById("msg");
+var probe = document.getElementById("probe");
+var cols = 0, rows = 0, chars, colors, zbuf, gridFont = 10;
+var msgSpans = [];
+
+function measure(fontPx) {
+  probe.style.fontFamily = getComputedStyle(art).fontFamily;
+  probe.style.fontSize = fontPx + "px";
+  probe.textContent = new Array(201).join("M");
+  var wpx = probe.getBoundingClientRect().width / 200;
+  probe.textContent = "";
+  return wpx;
+}
+
+function layout() {
+  var W = document.documentElement.clientWidth || window.innerWidth;
+  var H = document.documentElement.clientHeight || window.innerHeight;
+  var ratio = measure(100) / 100;            // char width per px of font size
+  var portrait = H > W * 1.15;
+  var S = portrait ? 37 : 44;                // target bouquet scale (detail level)
+  // Cell is w wide and 2w tall (same 1:2 aspect as a terminal cell).
+  var w = min(W / (2.7 * S + 8), H / (2 * (1.45 * S + 6)));
+  w = max(w, 2.2);
+  gridFont = w / ratio;
+  art.style.fontSize = gridFont + "px";
+  art.style.lineHeight = (2 * w) + "px";
+  cols = max(20, Math.floor(W / w) - 1);
+  rows = max(12, Math.floor(H / (2 * w)) - 1);
+  art.style.width = (cols * w) + "px";
+  art.style.height = (rows * 2 * w) + "px";
+  var n = cols * rows;
+  chars = new Array(n); colors = new Int16Array(n); zbuf = new Float64Array(n);
+  // The message sits on the second-to-last row, like the terminal version,
+  // but is never smaller than a readable size.
+  var mf = max(gridFont * 1.05, min(22, W / 17));
+  msgEl.style.fontSize = mf + "px";
+  msgEl.style.lineHeight = mf * 1.3 + "px";
+  var vr = rows - 2;
+  var sc = max(1.0, min((vr - 2) / 1.45, (cols - 2) / 2.7));
+  var cyy = 1 + 0.78 * sc + max(0, (vr - 2 - 1.45 * sc) / 2);
+  var msgRow = min(rows - 2, Math.round(cyy + 0.67 * sc + 6));
+  var rowTop = msgRow * 2 * w;
+  msgEl.style.top = (rowTop + w - mf * 0.65) + "px";
+  if (!msgSpans.length) {
+    for (var i = 0; i < MESSAGE.length; i++) {
+      var sp = document.createElement("span");
+      sp.textContent = MESSAGE[i];
+      msgEl.appendChild(sp); msgSpans.push(sp);
+    }
+  }
+}
+
+function draw(t) {
+  render(scene, t, cols, rows, hearts, chars, colors, zbuf);
+  var out = [], last = -1, open = false;
+  for (var r = 0; r < rows; r++) {
+    var base = r * cols;
+    for (var c = 0; c < cols; c++) {
+      var ch = chars[base + c];
+      if (ch === " ") { out.push(" "); continue; }
+      var col = colors[base + c];
+      if (col !== last) {
+        if (open) out.push("</span>");
+        out.push('<span style="color:' + CSS[col] + '">');
+        open = true; last = col;
+      }
+      out.push(ch.charCodeAt(0) > 127 ? '<span class="w">' + ch + "</span>" : esc(ch));
+    }
+    if (r < rows - 1) out.push("\n");
+  }
+  if (open) out.push("</span>");
+  art.innerHTML = out.join("");
+  var shift = trunc(t * 6);
+  for (var i = 0; i < msgSpans.length; i++)
+    msgSpans[i].style.color = CSS[MSG_COLORS[(i + shift) % MSG_COLORS.length]];
+}
+
+var scene = buildScene();
+var hearts = [];
+updateHearts(hearts, 0);
+for (var w0 = 0; w0 < 40; w0++) updateHearts(hearts, 0.25);   // start with hearts already floating
+
+var params = new URLSearchParams(location.search);
+var fixedT = params.has("t") ? parseFloat(params.get("t")) : null;
+layout();
+var resizeTimer = null;
+window.addEventListener("resize", function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(layout, 60); });
+
+var startT = null, lastT = null, lastDraw = 0;
+function frame(now) {
+  if (startT === null) { startT = lastT = now; }
+  var dt = (now - lastT) / 1000; lastT = now;
+  if (dt > 0.5) dt = 0.5;
+  updateHearts(hearts, fixedT === null ? dt : 0);
+  if (now - lastDraw >= 1000 / 24 - 2) {
+    lastDraw = now;
+    draw(fixedT === null ? (now - startT) / 1000 : fixedT);
+  }
+  requestAnimationFrame(frame);
+}
+draw(fixedT === null ? 0 : fixedT);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
